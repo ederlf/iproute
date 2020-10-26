@@ -55,26 +55,27 @@ func VethGetLinkByName(name string) (*netlink.Veth, error) {
 //            non-nil otherwise
 func VethGetPeerLinkByName(name string) (*netlink.Veth, error) {
 	l, err := netlink.LinkByName(name)
-	if err == nil {
-		switch l := l.(type) {
+	if err != nil{
+		return nil, fmt.Errorf("VethGetPeerLinkByName(%s): %v", name, err)
+	} 
+
+	switch l := l.(type) {
 		case *netlink.Veth:
-			idx, err := netlink.VethPeerIndex(l)
+			peer_idx, err := netlink.VethPeerIndex(l)
 			if err != nil {
 				return nil, fmt.Errorf("VethPeerIndex(%s): %v", name, err)
 			}
 
-			link, err := netlink.LinkByIndex(idx)
+			link, err := netlink.LinkByIndex(peer_idx); 
 			if err != nil {
 				return nil, fmt.Errorf("LinkByIndex(%s): %v", name, err)
 			}
-
+			
 			return link.(*netlink.Veth), nil
 		default:
 			return nil,
 				fmt.Errorf("VethGetPeerLinkByName(): %s is not veth", name)
-		}
 	}
-	return nil, fmt.Errorf("VethGetPeerLinkByName(%s): %v", name, err)
 }
 
 // VethGetByName returns a pointer to Veth whose name is `name'
@@ -87,22 +88,25 @@ func VethGetPeerLinkByName(name string) (*netlink.Veth, error) {
 func VethGetByName(name string) (*Veth, error) {
 	var veth Veth
 
-	if l, err := VethGetLinkByName(name); err == nil {
-		veth.Link = l
-	} else {
+	link, err := VethGetLinkByName(name)
+	if err != nil {
 		return nil, fmt.Errorf("VethGetLinkByName(%s) %v", name, err)
+	}	
+
+	veth.Link = link
+	
+	peer_link, err := VethGetPeerLinkByName(name)
+	if err != nil {
+		if IsNotFound(err) {
+			// the peer belongs to a different namespace
+			return &veth, nil
+		} else {
+			return nil, fmt.Errorf("VethGetPeerLinkByName(%s): %v", name, err)
+		}
 	}
-	if l, err := VethGetPeerLinkByName(name); err == nil {
-		veth.Peer = l
-		return &veth, nil
-	} else if IsNotFound(err) {
-		//
-		// the peer belongs to a different namespace
-		//
-		return &veth, nil
-	} else {
-		return nil, fmt.Errorf("VethGetPeerLinkByName(%s): %v", name, err)
-	}
+
+	veth.Peer = peer_link
+	return &veth, nil
 }
 
 // VethAdd adds a veth pair. The values of all fields except
