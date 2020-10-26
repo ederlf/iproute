@@ -54,22 +54,24 @@ func VethGetLinkByName(name string) (*netlink.Veth, error) {
 //         2. nil if there is the peer of veth interface whose name is `name'
 //            non-nil otherwise
 func VethGetPeerLinkByName(name string) (*netlink.Veth, error) {
-	var err error
-
 	l, err := netlink.LinkByName(name)
 	if err == nil {
 		switch l := l.(type) {
-			case *netlink.Veth:
-				idx, err := netlink.VethPeerIndex(l)
-				if err != nil {break}
-				
-				link, err := netlink.LinkByIndex(idx); 
-				if err != nil {break}
-				
-				return link.(*netlink.Veth), nil
-			default:
-				return nil,
-					fmt.Errorf("VethGetPeerLinkByName(): %s is not veth", name)
+		case *netlink.Veth:
+			idx, err := netlink.VethPeerIndex(l)
+			if err != nil {
+				return nil, fmt.Errorf("VethPeerIndex(%s): %v", name, err)
+			}
+
+			link, err := netlink.LinkByIndex(idx)
+			if err != nil {
+				return nil, fmt.Errorf("LinkByIndex(%s): %v", name, err)
+			}
+
+			return link.(*netlink.Veth), nil
+		default:
+			return nil,
+				fmt.Errorf("VethGetPeerLinkByName(): %s is not veth", name)
 		}
 	}
 	return nil, fmt.Errorf("VethGetPeerLinkByName(%s): %v", name, err)
