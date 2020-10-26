@@ -55,26 +55,26 @@ func VethGetLinkByName(name string) (*netlink.Veth, error) {
 //            non-nil otherwise
 func VethGetPeerLinkByName(name string) (*netlink.Veth, error) {
 	l, err := netlink.LinkByName(name)
-	if err != nil{
+	if err != nil {
 		return nil, fmt.Errorf("VethGetPeerLinkByName(%s): %v", name, err)
-	} 
+	}
 
 	switch l := l.(type) {
-		case *netlink.Veth:
-			peer_idx, err := netlink.VethPeerIndex(l)
-			if err != nil {
-				return nil, fmt.Errorf("VethPeerIndex(%s): %v", name, err)
-			}
+	case *netlink.Veth:
+		peer_idx, err := netlink.VethPeerIndex(l)
+		if err != nil {
+			return nil, fmt.Errorf("VethPeerIndex(%s): %v", name, err)
+		}
 
-			link, err := netlink.LinkByIndex(peer_idx); 
-			if err != nil {
-				return nil, fmt.Errorf("LinkByIndex(%s): %v", name, err)
-			}
-			
-			return link.(*netlink.Veth), nil
-		default:
-			return nil,
-				fmt.Errorf("VethGetPeerLinkByName(): %s is not veth", name)
+		link, err := netlink.LinkByIndex(peer_idx)
+		if err != nil {
+			return nil, fmt.Errorf("LinkByIndex(%s): %v", name, err)
+		}
+
+		return link.(*netlink.Veth), nil
+	default:
+		return nil,
+			fmt.Errorf("VethGetPeerLinkByName(): %s is not veth", name)
 	}
 }
 
@@ -91,10 +91,10 @@ func VethGetByName(name string) (*Veth, error) {
 	link, err := VethGetLinkByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("VethGetLinkByName(%s) %v", name, err)
-	}	
+	}
 
 	veth.Link = link
-	
+
 	peer_link, err := VethGetPeerLinkByName(name)
 	if err != nil {
 		if IsNotFound(err) {
@@ -122,7 +122,8 @@ func VethAdd(name, peer string, up bool) (*Veth, error) {
 		veth Veth
 		msg  string
 	)
-	l := &netlink.Veth{
+
+	net_veth := &netlink.Veth{
 		LinkAttrs: netlink.LinkAttrs{
 			Name:        name,
 			TxQLen:      DefaultTxQlen,
@@ -132,20 +133,25 @@ func VethAdd(name, peer string, up bool) (*Veth, error) {
 		},
 		PeerName: peer,
 	}
-	err := netlink.LinkAdd(l)
+	err := netlink.LinkAdd(net_veth)
 	if err != nil {
 		return nil, err
 	}
-	if l, err := VethGetLinkByName(name); err == nil {
-		veth.Link = l
-	} else {
+
+	link, err := VethGetLinkByName(name)
+	if err != nil {
 		return nil, fmt.Errorf("VethGetLinkByName(%s): %v", name, err)
 	}
-	if l, err := VethGetPeerLinkByName(name); err == nil {
-		veth.Peer = l
-	} else {
+
+	veth.Link = link
+
+	peer_link, err := VethGetPeerLinkByName(name)
+	if err != nil {
 		return nil, fmt.Errorf("VethGetPeerLinkByName(%s): %v", name, err)
 	}
+
+	veth.Peer = peer_link
+
 	if up {
 		if err := netlink.LinkSetUp(veth.Link); err != nil {
 			msg = fmt.Sprintf("LinkSetUp(%s): %v", veth.Name(), err)
@@ -157,9 +163,11 @@ func VethAdd(name, peer string, up bool) (*Veth, error) {
 			msg = fmt.Sprintf("LinkSetUp(%s): %v", veth.PeerName(), err)
 		}
 	}
+
 	if msg == "" {
 		return &veth, nil
 	}
+
 	return &veth, fmt.Errorf(msg)
 }
 
